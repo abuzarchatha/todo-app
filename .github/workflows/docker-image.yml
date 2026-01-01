@@ -1,0 +1,67 @@
+# .github/workflows/docker-build-push.yml
+name: Docker Build & Push
+
+on:
+  push:
+    branches:
+      - main          # ya master, aapki default branch
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1️⃣ Checkout source code
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2️⃣ Set up Python (aur test run karne ke liye)
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies (for tests)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          # optional: install pytest for unit tests
+          pip install pytest
+
+      # 3️⃣ Run tests (optional but recommended)
+      - name: Run unit tests
+        run: |
+          # agar aapka `tests/` folder hai to yeh command chalti hai
+          pytest || echo "No tests found – continuing..."
+
+      # 4️⃣ Login to Docker Hub (using repo secrets)
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      # 5️⃣ Build Docker image (tag with SHA for uniqueness)
+      - name: Build Docker image
+        run: |
+          IMAGE_NAME=${{ secrets.DOCKER_USERNAME }}/todo-app
+          TAG=${{ github.sha }}               # commit SHA as tag
+          docker build -t $IMAGE_NAME:$TAG .
+          # also tag as latest for easy pull
+          docker tag $IMAGE_NAME:$TAG $IMAGE_NAME:latest
+
+      # 6️⃣ Push both tags (latest + commit‑SHA)
+      - name: Push Docker image (sha tag)
+        run: |
+          IMAGE_NAME=${{ secrets.DOCKER_USERNAME }}/todo-app
+          TAG=${{ github.sha }}
+          docker push $IMAGE_NAME:$TAG
+
+      - name: Push Docker image (latest tag)
+        run: |
+          IMAGE_NAME=${{ secrets.DOCKER_USERNAME }}/todo-app
+          docker push $IMAGE_NAME:latest
+
